@@ -1,8 +1,5 @@
-// Guarda anti-rajada client-side (OOP: classe com estado proprio).
-// Objetivo: impedir que a UI dispare dezenas de requisicoes seguidas
-// (cliques rapidos, loops, retry agressivo) e tome 429 da tier gratis
-// ou vire vetor de DDoS contra o Supabase/ExerciseDB.
-// Defesa em profundidade: o workflow ddos-guard.yml monitora de fora.
+// Shared kernel (DDD): RateLimiter usado pelos contextos.
+// Puro e sem I/O: pode ser importado por qualquer camada.
 
 // Janela de contagem de uma chave (inicio + usos na janela).
 type Window = { start: number; count: number };

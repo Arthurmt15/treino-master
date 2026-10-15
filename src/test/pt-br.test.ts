@@ -2,7 +2,7 @@
 // Garante traducao conhecida e fallback sem tela vazia.
 
 import { describe, expect, it } from "vitest";
-import { BODY_PARTS_PT, EQUIPMENT_PT, WORKOUT_PT, pt } from "@/lib/pt-br";
+import { BODY_PARTS_PT, EQUIPMENT_PT, WORKOUT_PT, pt } from "@/shared/pt-br";
 
 describe("pt-br", () => {
   it("traduz musculos e equipamentos conhecidos", () => {

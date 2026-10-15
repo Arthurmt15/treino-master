@@ -6,8 +6,8 @@ import { useMemo, useState } from "react";
 import { FitnessApp } from "@/components/fitness/app";
 import { ExerciseCard } from "@/components/fitness/exercise-card";
 import { BottomNav } from "@/components/fitness/bottom-nav";
-import { useExercises } from "@/lib/use-exercises";
-import { exerciseCatalog } from "@/lib/exercisedb";
+import { useExercises } from "@/presentation/catalog/use-exercises";
+import { exerciseCatalog } from "@/application/catalog/exercise-catalog";
 
 // Metadados p/ SEO e preview (padrao do projeto).
 export const Route = createFileRoute("/exercicios")({

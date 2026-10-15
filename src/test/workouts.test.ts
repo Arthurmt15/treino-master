@@ -2,7 +2,8 @@
 // jsdom ja fornece localStorage; usamos Map isolado por teste.
 
 import { beforeEach, describe, expect, it } from "vitest";
-import { Workout, WorkoutItem, WorkoutStore } from "@/lib/workouts";
+import { Workout, WorkoutItem } from "@/domain/training/workout";
+import { WorkoutStore } from "@/application/training/workout-store";
 
 // Item padrao (supino 3x10-12 com 20kg).
 function bench() {

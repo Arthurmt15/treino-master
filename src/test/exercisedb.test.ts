@@ -2,8 +2,9 @@
 // Sem rede; roda em jsdom via vitest.
 
 import { describe, expect, it, vi } from "vitest";
-import { Exercise, ExerciseCatalog } from "@/lib/exercisedb";
-import { RateLimiter } from "@/lib/rate-limit";
+import { Exercise } from "@/domain/catalog/exercise";
+import { ExerciseCatalog } from "@/application/catalog/exercise-catalog";
+import { RateLimiter } from "@/shared/rate-limit";
 
 // Massa base: 1 item no formato bruto da API.
 function rawBench() {

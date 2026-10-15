@@ -2,7 +2,7 @@
 // Sem timers falsos: o `now` e uma funcao controlada pelo teste.
 
 import { describe, expect, it } from "vitest";
-import { RateLimiter } from "@/lib/rate-limit";
+import { RateLimiter } from "@/shared/rate-limit";
 
 // Relogio manual (o teste avanca o tempo a vontade).
 function clock() {

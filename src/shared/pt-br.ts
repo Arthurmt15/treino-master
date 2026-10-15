@@ -1,5 +1,5 @@
-// Traducao PT-BR das labels vindas da API (que e em ingles).
-// V1: traduzimos filtros e campos; nomes/instrucoes seguem em EN.
+// Shared kernel (DDD): dicionario PT-BR das labels da API (em ingles).
+// V1: traduz filtros e campos; nomes/instrucoes seguem em EN.
 
 export const BODY_PARTS_PT: Record<string, string> = {
   chest: "Peito",

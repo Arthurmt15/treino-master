@@ -3,8 +3,8 @@
 
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { pt, BODY_PARTS_PT, EQUIPMENT_PT } from "@/lib/pt-br";
-import type { Exercise } from "@/lib/exercisedb";
+import { pt, BODY_PARTS_PT, EQUIPMENT_PT } from "@/shared/pt-br";
+import type { Exercise } from "@/domain/catalog/exercise";
 
 // Props do card (exercicio + acao de adicionar ao treino).
 type Props = {

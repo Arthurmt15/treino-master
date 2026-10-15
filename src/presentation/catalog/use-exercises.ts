@@ -1,8 +1,9 @@
-// Hook de exercicios com React Query (cache 1h, evita rate-limit).
-// Fonte: ExerciseDB Free OSS; fallback silencioso para lista vazia.
+// Apresentacao: hook de exercicios (React Query, cache 1h).
+// Consome o servico da camada de aplicacao; a UI nao conhece a API.
 
 import { useQuery } from "@tanstack/react-query";
-import { exerciseCatalog, type Exercise } from "@/lib/exercisedb";
+import { exerciseCatalog } from "@/application/catalog/exercise-catalog";
+import type { Exercise } from "@/domain/catalog/exercise";
 
 // Chave do cache (compartilhada entre telas).
 export const EXERCISES_KEY = ["exercises"];
@@ -11,7 +12,7 @@ export const EXERCISES_KEY = ["exercises"];
 export function useExercises(limit = 60, offset = 0) {
   return useQuery<Exercise[]>({
     queryKey: [...EXERCISES_KEY, limit, offset],
-    // Busca via catalogo (entidade normalizada, ver lib/exercisedb.ts).
+    // Busca via catalogo (entidades normalizadas, anti-rajada interno).
     queryFn: () => exerciseCatalog.list(limit, offset),
     // Cache longo: dados de exercicio mudam pouco.
     staleTime: 1000 * 60 * 60,

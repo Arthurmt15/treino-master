@@ -3,13 +3,13 @@
 
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { WORKOUT_PT } from "@/lib/pt-br";
-import type { WorkoutItem } from "@/lib/workouts";
+import { WORKOUT_PT } from "@/shared/pt-br";
+import type { NewWorkoutItem, WorkoutItem } from "@/domain/training/workout";
 
 // Props: item atual + callbacks de edicao/exclusao.
 type Props = {
   item: WorkoutItem;
-  onChange: (patch: Partial<WorkoutItem>) => void;
+  onChange: (patch: Partial<NewWorkoutItem>) => void;
   onRemove: () => void;
 };
 

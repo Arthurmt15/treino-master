@@ -1,5 +1,6 @@
-// Cliente Supabase (banco + auth Google via Supabase Auth).
-// Usa lazy import para nao obrigar a dependencia antes do `bun add`.
+// Infraestrutura: cliente Supabase (DDD: detalhe tecnico, fora do dominio).
+// Banco (Postgres + RLS) + Auth Google via Supabase Auth.
+// Usa lazy import para nao obrigar a dependencia antes do install.
 // Env esperadas: VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.
 
 import type { SupabaseClient } from "@supabase/supabase-js";

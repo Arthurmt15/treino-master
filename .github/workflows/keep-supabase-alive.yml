@@ -1,0 +1,39 @@
+# Keep-alive do Supabase (evita pausa por inatividade no plano free).
+# O Supabase pausa projetos free apos ~7 dias sem uso; este job pinga
+# a API REST a cada 2 dias para gerar atividade no banco.
+# Segredos necessarios (repo > Settings > Secrets > Actions):
+#   SUPABASE_URL      -> ex: https://xyzcompany.supabase.co
+#   SUPABASE_ANON_KEY -> anon key (RLS continua protegendo os dados).
+
+name: keep-supabase-alive
+
+on:
+  # Agenda: 08:00 UTC a cada 2 dias (cron minimo de 5 min no GitHub).
+  schedule:
+    - cron: "0 8 */2 * *"
+  # Permite rodar manualmente (aba Actions > Run workflow).
+  workflow_dispatch:
+
+jobs:
+  ping:
+    # Roda em runner publico, sem checkout (so curl na API).
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Consulta leve: 1 linha de weight_logs (tabela pequena, com RLS).
+      # Sem linhas / sem tabela ainda: 200 vazio tambem conta como atividade.
+      - name: Ping Supabase REST (gera atividade no banco)
+        run: |
+          # Falha amigavel se os segredos nao existirem (nao quebra o badge).
+          if [ -z "${{ secrets.SUPABASE_URL }}" ] || [ -z "${{ secrets.SUPABASE_ANON_KEY }}" ]; then
+            echo "Segredos SUPABASE_URL/ANON_KEY ausentes; pule o ping."
+            exit 0
+          fi
+          # GET com apikey + Authorization (padrao do PostgREST do Supabase).
+          code=$(curl -s -o /tmp/ping.json -w "%{http_code}" \
+            "${{ secrets.SUPABASE_URL }}/rest/v1/weight_logs?select=id&limit=1" \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}")
+          echo "HTTP $code"; head -c 300 /tmp/ping.json; echo
+          # Aceita 200 (ok) e 401/404 (projeto acordado, tabela/RLS ainda pendente).
+          case "$code" in 200|401|404) exit 0;; *) exit 1;; esac

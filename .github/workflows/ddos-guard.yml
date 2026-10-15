@@ -1,0 +1,89 @@
+# Guarda anti-DDoS / saude dos backends (monitoramento externo).
+# Nao bloqueia ataques sozinho (isso e papel do Cloudflare/WAF no deploy);
+# este job detecta indisponibilidade, lentidao e 429s recorrentes e abre
+# issue automatica para o dono agir. Defesa em camadas com:
+#   - src/lib/rate-limit.ts (contem rajadas no client)
+#   - RLS do Supabase (anon key nao lista dados alheios)
+# Segredos opcionais (Settings > Secrets > Actions):
+#   SUPABASE_URL, SUPABASE_ANON_KEY (pula o check Supabase se ausentes).
+
+name: ddos-guard
+
+on:
+  # Checagem diaria as 09:00 UTC (suficiente p/ app pessoal).
+  schedule:
+    - cron: "0 9 * * *"
+  # Botao manual (Actions > ddos-guard > Run workflow).
+  workflow_dispatch:
+
+jobs:
+  probe:
+    # Runners com curl + gh (GitHub CLI) pre-instalados.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Sonda 1: ExerciseDB gratis (limite 10s; 429 = rate-limit, nao queda).
+      - name: Sondar ExerciseDB (catalogo de GIFs)
+        id: exercisedb
+        run: |
+          # Mede tempo total e codigo HTTP em 1 chamada leve.
+          out=$(curl -s -o /tmp/exdb.json -w "%{http_code} %{time_total}" \
+            --max-time 15 "https://oss.exercisedb.dev/api/v1/exercises?limit=1&offset=0")
+          echo "ExerciseDB -> HTTP $out"
+          # Guarda resultado p/ o passo de veredito.
+          echo "result=$out" >> "$GITHUB_OUTPUT"
+
+      # Sonda 2: Supabase REST (pula sem segredos; 401 = projeto acordado).
+      - name: Sondar Supabase REST (banco)
+        id: supabase
+        run: |
+          # Sem segredos: registra e segue (nao falha o job).
+          if [ -z "${{ secrets.SUPABASE_URL }}" ] || [ -z "${{ secrets.SUPABASE_ANON_KEY }}" ]; then
+            echo "Sem segredos Supabase; sonda pulada."
+            echo "result=skipped" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Consulta minima (1 linha) com tempo medido.
+          out=$(curl -s -o /tmp/sb.json -w "%{http_code} %{time_total}" \
+            --max-time 15 "${{ secrets.SUPABASE_URL }}/rest/v1/weight_logs?select=id&limit=1" \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}")
+          echo "Supabase -> HTTP $out"
+          echo "result=$out" >> "$GITHUB_OUTPUT"
+
+      # Veredito: falha o job se algum backend caiu/lento (abre issue abaixo).
+      - name: Avaliar veredito
+        id: verdict
+        run: |
+          fail=0
+          # ExerciseDB: 200 ok; 429 = cota estourada (alerta, nao queda).
+          case "${{ steps.exercisedb.outputs.result }}" in
+            200*) echo "ExerciseDB OK" ;;
+            429*) echo "ALERTA: ExerciseDB em rate-limit (429)" ; fail=1 ;;
+            *) echo "FALHA: ExerciseDB fora do ar" ; fail=1 ;;
+          esac
+          # Supabase: 200/401/404 = acordado; demais = problema.
+          case "${{ steps.supabase.outputs.result }}" in
+            skipped) echo "Supabase: pulado" ;;
+            200*|401*|404*) echo "Supabase OK" ;;
+            *) echo "FALHA: Supabase fora do ar" ; fail=1 ;;
+          esac
+          echo "fail=$fail" >> "$GITHUB_OUTPUT"
+          # Falha o job para disparar a issue (e o badge vermelho).
+          if [ "$fail" = "1" ]; then exit 1; fi
+
+      # Abre issue automaticamente quando o veredito falhou.
+      - name: Abrir issue de incidente
+        if: failure() && steps.verdict.outputs.fail == '1'
+        run: |
+          # Evita duplicar: so abre se nao houver issue aberta igual.
+          open=$(gh issue list --state open --search "backend fora do ar (ddos-guard)" --json number --jq length)
+          if [ "$open" = "0" ]; then
+            gh issue create --title "[ddos-guard] backend fora do ar $(date -u +%F)" \
+              --body "O job ddos-guard detectou falha/lentidao. ExerciseDB: ${{ steps.exercisedb.outputs.result }}. Supabase: ${{ steps.supabase.outputs.result }}. Verificar Cloudflare/WAF, cotas e status dos provedores." \
+              --label "incident"
+          else
+            echo "Issue de incidente ja aberta; nada a fazer."
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

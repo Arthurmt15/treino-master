@@ -5,9 +5,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 // URL publica do projeto (dashboard Supabase > Settings > API).
-const URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const URL = import.meta.env["VITE_SUPABASE_URL"] as string | undefined;
 // Chave anonima (pode expor no front; RLS protege os dados).
-const ANON = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+const ANON = import.meta.env["VITE_SUPABASE_ANON_KEY"] as string | undefined;
 
 // Singleton em memoria (evita multiplas sessoes no HMR).
 let cached: SupabaseClient | null = null;

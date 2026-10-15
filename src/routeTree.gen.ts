@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as EvolucaoRouteImport } from './routes/evolucao'
+import { Route as ExerciciosRouteImport } from './routes/exercicios'
 import { Route as HistoricoRouteImport } from './routes/historico'
 import { Route as PerfilRouteImport } from './routes/perfil'
 import { Route as TreinosRouteImport } from './routes/treinos'
@@ -30,6 +31,11 @@ const HistoricoRoute = HistoricoRouteImport.update({
   path: '/historico',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ExerciciosRoute = ExerciciosRouteImport.update({
+  id: '/exercicios',
+  path: '/exercicios',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PerfilRoute = PerfilRouteImport.update({
   id: '/perfil',
   path: '/perfil',
@@ -44,6 +50,7 @@ const TreinosRoute = TreinosRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/evolucao': typeof EvolucaoRoute
+  '/exercicios': typeof ExerciciosRoute
   '/historico': typeof HistoricoRoute
   '/perfil': typeof PerfilRoute
   '/treinos': typeof TreinosRoute
@@ -51,6 +58,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/evolucao': typeof EvolucaoRoute
+  '/exercicios': typeof ExerciciosRoute
   '/historico': typeof HistoricoRoute
   '/perfil': typeof PerfilRoute
   '/treinos': typeof TreinosRoute
@@ -59,21 +67,23 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/evolucao': typeof EvolucaoRoute
+  '/exercicios': typeof ExerciciosRoute
   '/historico': typeof HistoricoRoute
   '/perfil': typeof PerfilRoute
   '/treinos': typeof TreinosRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/evolucao' | '/historico' | '/perfil' | '/treinos'
+  fullPaths: '/' | '/evolucao' | '/exercicios' | '/historico' | '/perfil' | '/treinos'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/evolucao' | '/historico' | '/perfil' | '/treinos'
-  id: '__root__' | '/' | '/evolucao' | '/historico' | '/perfil' | '/treinos'
+  to: '/' | '/evolucao' | '/exercicios' | '/historico' | '/perfil' | '/treinos'
+  id: '__root__' | '/' | '/evolucao' | '/exercicios' | '/historico' | '/perfil' | '/treinos'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   EvolucaoRoute: typeof EvolucaoRoute
+  ExerciciosRoute: typeof ExerciciosRoute
   HistoricoRoute: typeof HistoricoRoute
   PerfilRoute: typeof PerfilRoute
   TreinosRoute: typeof TreinosRoute
@@ -102,6 +112,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HistoricoRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/exercicios': {
+      id: '/exercicios'
+      path: '/exercicios'
+      fullPath: '/exercicios'
+      preLoaderRoute: typeof ExerciciosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/perfil': {
       id: '/perfil'
       path: '/perfil'
@@ -122,6 +139,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   EvolucaoRoute: EvolucaoRoute,
+  ExerciciosRoute: ExerciciosRoute,
   HistoricoRoute: HistoricoRoute,
   PerfilRoute: PerfilRoute,
   TreinosRoute: TreinosRoute,

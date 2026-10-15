@@ -1,28 +1,21 @@
-// Cliente da ExerciseDB Free OSS (GIFs de exercicios).
-// Base publica, sem API key: https://oss.exercisedb.dev/api/v1
-// Fallback estatico: ExerciseGymGifsDB via jsDelivr (sem key).
+// Catalogo de exercicios (OOP: entidade Exercise + servico ExerciseCatalog).
+// Fonte: ExerciseDB Free OSS (1500 exercicios, GIF 180p, sem API key).
+// Base publica: https://oss.exercisedb.dev/api/v1
 
-// URL base da API gratuita (1500 exercicios, GIF 180p).
+import { rateLimiter, type RateLimiter } from "@/lib/rate-limit";
+
+// URL base da API gratuita.
 export const EXERCISEDB_BASE = "https://oss.exercisedb.dev/api/v1";
 
 // URL base do fallback estatico (1323 exercicios via CDN).
 export const FALLBACK_BASE =
   "https://cdn.jsdelivr.net/gh/JahelCuadrado/ExerciseGymGifsDB@v1.1.0";
 
-// Formato normalizado usado pelo app (independe da fonte).
-export type Exercise = {
-  exerciseId: string; // id unico (ex: "EIeI8Vf")
-  name: string; // nome em ingles (traduzimos labels depois)
-  gifUrl: string; // animacao demonstrativa do movimento
-  bodyParts: string[]; // ex: ["chest"]
-  targetMuscles: string[]; // musculo principal
-  secondaryMuscles: string[]; // musculos de apoio
-  equipments: string[]; // ex: ["barbell"]
-  instructions: string[]; // passo a passo
-};
+// Chave do limitador p/ a listagem (contem cliques rapidos/loops).
+const LIST_GUARD_KEY = "exercisedb:list";
 
 // Resposta bruta da ExerciseDB v1 (campos podem variar).
-type RawV1 = Partial<{
+export type RawExercise = Partial<{
   exerciseId: string;
   name: string;
   gifUrl: string;
@@ -33,64 +26,94 @@ type RawV1 = Partial<{
   instructions: string[];
 }>;
 
-// Normaliza um item bruto para o formato do app.
-function normalize(raw: RawV1, index: number): Exercise {
-  // Gera id estavel quando a API nao envia um.
-  const id = raw.exerciseId ?? `ex-${index}`;
-  return {
-    exerciseId: id,
-    name: raw.name ?? "Unnamed exercise",
-    // GIF e obrigatorio no card; string vazia esconde a imagem.
-    gifUrl: raw.gifUrl ?? "",
-    bodyParts: raw.bodyParts ?? [],
-    targetMuscles: raw.targetMuscles ?? [],
-    secondaryMuscles: raw.secondaryMuscles ?? [],
-    equipments: raw.equipments ?? [],
-    instructions: raw.instructions ?? [],
-  };
-}
+/** Entidade: um exercicio normalizado (independe da fonte dos dados). */
+export class Exercise {
+  constructor(
+    public readonly exerciseId: string, // id unico (ex: "EIeI8Vf")
+    public readonly name = "Unnamed exercise", // nome em ingles (v1)
+    public readonly gifUrl = "", // animacao do movimento (vazio esconde)
+    public readonly bodyParts: string[] = [], // ex: ["chest"]
+    public readonly targetMuscles: string[] = [], // musculo principal
+    public readonly secondaryMuscles: string[] = [], // musculos de apoio
+    public readonly equipments: string[] = [], // ex: ["barbell"]
+    public readonly instructions: string[] = [], // passo a passo
+  ) {}
 
-// Busca a lista principal na ExerciseDB (com paginacao simples).
-export async function listExercises(limit = 48, offset = 0): Promise<Exercise[]> {
-  // Tenta a API oficial primeiro (gratis, sem key).
-  const url = `${EXERCISEDB_BASE}/exercises?limit=${limit}&offset=${offset}`;
-  const res = await fetch(url);
-  // Falha de rede/rate-limit: retorna vazio e a UI usa fallback.
-  if (!res.ok) return [];
-  const data = await res.json();
-  // A API retorna array direto ou { data: [...] }.
-  const arr: RawV1[] = Array.isArray(data) ? data : (data.data ?? []);
-  return arr.map(normalize);
-}
+  /** Fabrica: normaliza o payload bruto da API (gera id se faltar). */
+  static fromRaw(raw: RawExercise, index: number): Exercise {
+    return new Exercise(
+      raw.exerciseId ?? `ex-${index}`,
+      raw.name ?? "Unnamed exercise",
+      raw.gifUrl ?? "",
+      raw.bodyParts ?? [],
+      raw.targetMuscles ?? [],
+      raw.secondaryMuscles ?? [],
+      raw.equipments ?? [],
+      raw.instructions ?? [],
+    );
+  }
 
-// Busca um exercicio pelo id (detalhe com instrucoes).
-export async function getExercise(id: string): Promise<Exercise | null> {
-  // Endpoint de detalhe da v1 gratuita.
-  const res = await fetch(`${EXERCISEDB_BASE}/exercises/${id}`);
-  if (!res.ok) return null;
-  const data: RawV1 = await res.json();
-  return normalize(data, 0);
-}
-
-// Filtra em memoria (evita novas requisicoes e o rate-limit).
-export function filterExercises(
-  items: Exercise[],
-  query: string,
-  bodyPart: string,
-  equipment: string,
-): Exercise[] {
-  // Normaliza a busca para comparar sem case-sensitive.
-  const q = query.trim().toLowerCase();
-  return items.filter((ex) => {
-    // Filtro de texto: nome ou musculo alvo.
+  /** Diz se o exercicio passa nos filtros (busca + musculo + equipamento). */
+  matches(query: string, bodyPart: string, equipment: string): boolean {
+    // Busca sem case-sensitive (nome ou musculo alvo).
+    const q = query.trim().toLowerCase();
     const matchQ =
       !q ||
-      ex.name.toLowerCase().includes(q) ||
-      ex.targetMuscles.join(" ").toLowerCase().includes(q);
-    // Filtro por regiao corporal (chest, back, legs...).
-    const matchB = !bodyPart || ex.bodyParts.includes(bodyPart);
-    // Filtro por equipamento (barbell, dumbbell, bodyweight...).
-    const matchE = !equipment || ex.equipments.includes(equipment);
+      this.name.toLowerCase().includes(q) ||
+      this.targetMuscles.join(" ").toLowerCase().includes(q);
+    // Regiao corporal (ex: chest) e equipamento (ex: barbell).
+    const matchB = !bodyPart || this.bodyParts.includes(bodyPart);
+    const matchE = !equipment || this.equipments.includes(equipment);
     return matchQ && matchB && matchE;
-  });
+  }
 }
+
+// Tipo do fetch injetavel (testes passam um mock sem rede).
+export type FetchFn = typeof fetch;
+
+/**
+ * Servico do catalogo: busca na API, detalha e filtra em memoria.
+ * Fetch e limitador injetaveis (testavel sem rede nem estado global).
+ */
+export class ExerciseCatalog {
+  constructor(
+    private readonly fetchFn?: FetchFn,
+    private readonly baseUrl = EXERCISEDB_BASE,
+    private readonly limiter: Pick<RateLimiter, "allow"> = rateLimiter,
+  ) {}
+
+  // Resolve o fetch na hora da chamada (respeita mocks de teste).
+  private http(): FetchFn {
+    return this.fetchFn ?? fetch;
+  }
+
+  /** Lista paginada (limitada pelo anti-rajada; vazio = usar cache). */
+  async list(limit = 48, offset = 0): Promise<Exercise[]> {
+    // Rajada contida: a UI usa o cache do React Query em vez de rede.
+    if (!this.limiter.allow(LIST_GUARD_KEY)) return [];
+    const res = await this.http()(`${this.baseUrl}/exercises?limit=${limit}&offset=${offset}`);
+    // Falha de rede/rate-limit: vazio e a UI usa fallback.
+    if (!res.ok) return [];
+    const data: unknown = await res.json();
+    // A API retorna array direto ou { data: [...] }.
+    const arr: RawExercise[] = Array.isArray(data)
+      ? (data as RawExercise[])
+      : ((data as { data?: RawExercise[] }).data ?? []);
+    return arr.map((raw, i) => Exercise.fromRaw(raw, i));
+  }
+
+  /** Detalhe por id (GIF grande + instrucoes). */
+  async getById(id: string): Promise<Exercise | null> {
+    const res = await this.http()(`${this.baseUrl}/exercises/${id}`);
+    if (!res.ok) return null;
+    return Exercise.fromRaw((await res.json()) as RawExercise, 0);
+  }
+
+  /** Filtra em memoria (evita novas requisicoes e o rate-limit). */
+  filter(items: Exercise[], query: string, bodyPart: string, equipment: string): Exercise[] {
+    return items.filter((ex) => ex.matches(query, bodyPart, equipment));
+  }
+}
+
+// Instancia compartilhada pelo app (fetch real + base oficial).
+export const exerciseCatalog = new ExerciseCatalog();

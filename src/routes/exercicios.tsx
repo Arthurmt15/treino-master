@@ -7,7 +7,7 @@ import { FitnessApp } from "@/components/fitness/app";
 import { ExerciseCard } from "@/components/fitness/exercise-card";
 import { BottomNav } from "@/components/fitness/bottom-nav";
 import { useExercises } from "@/lib/use-exercises";
-import { filterExercises } from "@/lib/exercisedb";
+import { exerciseCatalog } from "@/lib/exercisedb";
 
 // Metadados p/ SEO e preview (padrao do projeto).
 export const Route = createFileRoute("/exercicios")({
@@ -35,7 +35,7 @@ function ExerciciosPage() {
   const { data, isLoading, isError } = useExercises(60, 0);
   // Filtragem em memoria (evita novas requisicoes).
   const items = useMemo(
-    () => filterExercises(data ?? [], query, bodyPart, equipment),
+    () => exerciseCatalog.filter(data ?? [], query, bodyPart, equipment),
     [data, query, bodyPart, equipment],
   );
   return (

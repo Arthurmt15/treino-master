@@ -2,7 +2,7 @@
 // Fonte: ExerciseDB Free OSS; fallback silencioso para lista vazia.
 
 import { useQuery } from "@tanstack/react-query";
-import { listExercises, type Exercise } from "@/lib/exercisedb";
+import { exerciseCatalog, type Exercise } from "@/lib/exercisedb";
 
 // Chave do cache (compartilhada entre telas).
 export const EXERCISES_KEY = ["exercises"];
@@ -11,8 +11,8 @@ export const EXERCISES_KEY = ["exercises"];
 export function useExercises(limit = 60, offset = 0) {
   return useQuery<Exercise[]>({
     queryKey: [...EXERCISES_KEY, limit, offset],
-    // Busca na API e normaliza (ver lib/exercisedb.ts).
-    queryFn: () => listExercises(limit, offset),
+    // Busca via catalogo (entidade normalizada, ver lib/exercisedb.ts).
+    queryFn: () => exerciseCatalog.list(limit, offset),
     // Cache longo: dados de exercicio mudam pouco.
     staleTime: 1000 * 60 * 60,
     gcTime: 1000 * 60 * 60 * 24,

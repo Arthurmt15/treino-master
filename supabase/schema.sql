@@ -43,18 +43,34 @@ create table if not exists workout_logs (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references profiles(id) on delete cascade,
   workout_id uuid references workouts(id) on delete set null,
+  title text, -- nome exibido do treino concluido
+  exercises int, -- quantidade de exercicios na sessao
   finished_at timestamptz default now(),
   duration_min int, -- duracao real da sessao
   notes text
 );
+
+-- Migracao idempotente (bancos ja criados antes destas colunas).
+alter table workout_logs add column if not exists title text;
+alter table workout_logs add column if not exists exercises int;
 
 -- Evolucao de peso (alimenta grafico em /evolucao).
 create table if not exists weight_logs (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references profiles(id) on delete cascade,
   weighed_on date not null default current_date,
-  weight_kg numeric not null
+  weight_kg numeric not null,
+  unique (user_id, weighed_on) -- 1 registro por dia por usuario (upsert)
 );
+
+-- Migracao idempotente: garante a chave unica (user_id, weighed_on).
+do $$ begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'weight_logs_user_day_key'
+  ) then
+    alter table weight_logs add constraint weight_logs_user_day_key unique (user_id, weighed_on);
+  end if;
+end $$;
 
 -- RLS: ativa em todas (sem policy = ninguem acessa).
 alter table profiles enable row level security;
@@ -83,3 +99,23 @@ create policy "own logs" on workout_logs
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "own weight" on weight_logs
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- Cria o perfil automaticamente ao cadastrar um usuario (evita FK quebrada).
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.profiles (id, email, name)
+  values (new.id, new.email, coalesce(new.raw_user_meta_data->>'full_name', new.email))
+  on conflict (id) do nothing;
+  return new;
+end; $$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+-- Backfill: garante perfil para quem ja entrou antes do trigger.
+insert into profiles (id, email, name)
+select id, email, coalesce(raw_user_meta_data->>'full_name', email) from auth.users
+on conflict (id) do nothing;

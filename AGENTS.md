@@ -9,8 +9,11 @@
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
 
+## Git workflow (priority — always apply, no need to repeat)
+- Sempre commite e faça push direto na branch `main`, automaticamente, ao terminar uma tarefa. Nunca reescreva histórico já publicado (sem force push/rebase/amend de commits enviados).
+
 ## Frontend architecture
-- Fitness content routes compose the shared FitnessApp presentation module; keep demo session state frontend-only because this project requests a frontend, not persistence.
+- Fitness content routes compose the shared FitnessApp presentation module. A sessão de demonstração (tema, água, estado transitório) fica frontend-only, mas os dados do usuário (perfil, fichas, histórico, peso) são persistidos no Supabase (banco + RLS) para sincronizar entre dispositivos.
 - Define all theme colors in src/styles.css and use semantic tokens so both appearance modes stay consistent.
 - Use leaf route head metadata for each content page so navigation and social previews identify the page.
 

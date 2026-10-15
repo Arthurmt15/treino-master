@@ -32,10 +32,8 @@ function IndexPage() {
         Carregando…
       </p>
     );
-  // Sem Supabase no .env: mantém a demo local funcionando.
-  if (status === "unconfigured") return <FitnessApp />;
-  // Visitante anônimo: o início é o login com Google.
-  if (status === "anonymous") return <Navigate to="/login" />;
   // Autenticado: entra direto no seu ambiente.
-  return <FitnessApp />;
+  if (status === "authenticated") return <FitnessApp />;
+  // Qualquer visitante (anônimo ou sem config): o início é o login com Google.
+  return <Navigate to="/login" />;
 }

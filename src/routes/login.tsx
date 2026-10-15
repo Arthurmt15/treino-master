@@ -1,6 +1,6 @@
 // Rota /login: entrada do app via conta Google (Supabase Auth).
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dumbbell, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
@@ -55,6 +55,16 @@ function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState("");
   const navigate = useNavigate();
+  const autoTried = useRef(false); // Garante um único disparo automático.
+
+  // Dispara o OAuth automaticamente assim que o site abre (só uma vez).
+  useEffect(() => {
+    if (autoTried.current) return;
+    if (status !== "anonymous") return;
+    autoTried.current = true;
+    void handleGoogle();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
 
   // Dispara o OAuth e trata falha sem redirecionar.
   async function handleGoogle() {

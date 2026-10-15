@@ -13,3 +13,7 @@
 - Fitness content routes compose the shared FitnessApp presentation module; keep demo session state frontend-only because this project requests a frontend, not persistence.
 - Define all theme colors in src/styles.css and use semantic tokens so both appearance modes stay consistent.
 - Use leaf route head metadata for each content page so navigation and social previews identify the page.
+
+## Code conventions (priority — always apply, no need to repeat)
+- Sempre comente o código em pt-BR: cada arquivo novo ou editado deve ter comentários curtos explicando o que cada bloco faz (1 linha por função/bloco, sem textos longos).
+- Nunca crie arquivos com mais de 300 linhas: se passar disso, divida em módulos menores (ex.: extrair componentes, hooks ou utils para arquivos próprios).

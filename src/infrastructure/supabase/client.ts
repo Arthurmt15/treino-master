@@ -4,6 +4,7 @@
 // Env esperadas: VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { authErrorMessage } from "@/shared/auth-errors"; // Erros de auth -> pt-BR.
 
 // URL publica do projeto (dashboard Supabase > Settings > API).
 const URL = import.meta.env["VITE_SUPABASE_URL"] as string | undefined;
@@ -39,7 +40,8 @@ export async function signInWithGoogle(next = "/treinos"): Promise<void> {
     provider: "google",
     options: { redirectTo: `${window.location.origin}${next}` },
   });
-  if (error) throw error;
+  // Converte o erro do backend em mensagem amigável em pt-BR.
+  if (error) throw new Error(authErrorMessage(error.message));
 }
 
 // Encerra a sessao atual.

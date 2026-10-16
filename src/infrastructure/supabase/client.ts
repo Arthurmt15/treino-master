@@ -30,12 +30,32 @@ export function hasSupabase(): boolean {
   return Boolean(URL && ANON);
 }
 
+// Consulta /auth/v1/settings e diz se o provider OAuth esta habilitado.
+// Retorna null quando nao da para checar (rede/permissao): deixa o Supabase decidir.
+async function providerEnabled(provider: string): Promise<boolean | null> {
+  if (!URL || !ANON) return null;
+  try {
+    const res = await fetch(`${URL}/auth/v1/settings`, { headers: { apikey: ANON } });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { external?: Record<string, boolean> };
+    const value = data.external?.[provider];
+    return typeof value === "boolean" ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 // Inicia o login com Google (OAuth via Supabase Auth).
 // Pre-requisito: Client ID/Secret cadastrados no dashboard.
 export async function signInWithGoogle(next = "/treinos"): Promise<void> {
   const sb = await getSupabase();
   // Sem Supabase: avisa em vez de quebrar a tela.
   if (!sb) throw new Error("Supabase nao configurado (.env).");
+  // Pre-checa o provider: sem isso o navegador sairia da pagina e mostraria
+  // o JSON cru do Supabase (ex.: "provider is not enabled") em vez da mensagem.
+  if ((await providerEnabled("google")) === false) {
+    throw new Error(authErrorMessage("Unsupported provider: provider is not enabled"));
+  }
   const { error } = await sb.auth.signInWithOAuth({
     provider: "google",
     options: { redirectTo: `${window.location.origin}${next}` },

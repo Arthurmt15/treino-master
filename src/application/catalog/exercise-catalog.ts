@@ -9,8 +9,7 @@ import { rateLimiter, type RateLimiter } from "@/shared/rate-limit";
 export const EXERCISEDB_BASE = "https://oss.exercisedb.dev/api/v1";
 
 // URL base do fallback estatico (1323 exercicios via CDN).
-export const FALLBACK_BASE =
-  "https://cdn.jsdelivr.net/gh/JahelCuadrado/ExerciseGymGifsDB@v1.1.0";
+export const FALLBACK_BASE = "https://cdn.jsdelivr.net/gh/JahelCuadrado/ExerciseGymGifsDB@v1.1.0";
 
 // Chave do limitador p/ a listagem (contem cliques rapidos/loops).
 const LIST_GUARD_KEY = "exercisedb:list";

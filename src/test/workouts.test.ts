@@ -1,12 +1,11 @@
-// Testes das entidades de treino (OOP: WorkoutItem/Workout/WorkoutStore).
-// jsdom ja fornece localStorage; usamos Map isolado por teste.
+// Testes das entidades de treino (WorkoutItem/Workout) — camada de dominio.
+// Sem I/O: exercitamos as regras puras (volume, duplicata, revive).
 
-import { beforeEach, describe, expect, it } from "vitest";
-import { Workout, WorkoutItem } from "@/domain/training/workout";
-import { WorkoutStore } from "@/application/training/workout-store";
+import { describe, expect, it } from "vitest";
+import { Workout, WorkoutItem, type NewWorkoutItem } from "@/domain/training/workout";
 
 // Item padrao (supino 3x10-12 com 20kg).
-function bench() {
+function bench(): NewWorkoutItem {
   return {
     exerciseId: "EIeI8Vf",
     name: "barbell bench press",
@@ -17,12 +16,6 @@ function bench() {
     restSec: 60,
   };
 }
-
-// Store novo com memoria isolada a cada caso.
-let store: WorkoutStore;
-beforeEach(() => {
-  store = new WorkoutStore("teste", new Map<string, string>());
-});
 
 describe("WorkoutItem", () => {
   it("calcula volume (sets x reps x peso)", () => {
@@ -43,47 +36,39 @@ describe("WorkoutItem", () => {
   });
 });
 
-describe("Workout + WorkoutStore", () => {
-  it("cria ficha vazia e lista", () => {
-    const created = store.create("A - Peito");
-    expect(created).toBeInstanceOf(Workout);
-    expect(store.load()).toHaveLength(1);
-  });
-
+describe("Workout", () => {
   it("duplicata soma serie em vez de repetir item", () => {
     // Adiciona o supino 2x: 1 item com 4 series (3+1).
-    const created = store.create("A");
-    store.addItem(created.id, bench());
-    const next = store.addItem(created.id, bench());
-    const saved = next.find((w) => w.id === created.id) as Workout;
-    expect(saved.items).toHaveLength(1);
-    expect(saved.items[0]?.sets).toBe(4);
+    const workout = new Workout("w1", "A");
+    workout.addItem(bench());
+    workout.addItem(bench());
+    expect(workout.items).toHaveLength(1);
+    expect(workout.items[0]?.sets).toBe(4);
   });
 
   it("edita peso e remove item", () => {
-    const created = store.create("B");
-    store.addItem(created.id, bench());
-    const edited = store.updateItem(created.id, "EIeI8Vf", { weightKg: 25 });
-    expect(edited[0]?.items[0]?.weightKg).toBe(25);
-    const removed = store.removeItem(created.id, "EIeI8Vf");
-    expect(removed[0]?.items).toHaveLength(0);
+    const workout = new Workout("w2", "B");
+    workout.addItem(bench());
+    workout.updateItem("EIeI8Vf", { weightKg: 25 });
+    expect(workout.items[0]?.weightKg).toBe(25);
+    workout.removeItem("EIeI8Vf");
+    expect(workout.items).toHaveLength(0);
   });
 
   it("totalVolume soma os itens (peso corporal nao soma)", () => {
-    const created = store.create("C");
-    store.addItem(created.id, bench()); // 3x10x20 = 600
-    store.addItem(created.id, { ...bench(), exerciseId: "x2", name: "plank", reps: "30s", weightKg: 0 }); // 0
-    const [saved] = store.load();
-    expect(saved?.totalVolume()).toBe(600);
+    const workout = new Workout("w3", "C");
+    workout.addItem(bench()); // 3x10x20 = 600
+    workout.addItem({ ...bench(), exerciseId: "x2", name: "plank", reps: "30s", weightKg: 0 }); // 0
+    expect(workout.totalVolume()).toBe(600);
   });
 
   it("sobrevive a serializacao (revive apos JSON)", () => {
-    // Simula reload: nova instancia lendo o mesmo storage.
-    const created = store.create("D");
-    store.addItem(created.id, bench());
-    const raw = (store as unknown as { storage: Map<string, string> }).storage;
-    const reloaded = new WorkoutStore("teste", raw).load();
-    expect(reloaded[0]).toBeInstanceOf(Workout);
-    expect(reloaded[0]?.totalVolume()).toBe(600);
+    const workout = new Workout("w4", "D");
+    workout.addItem(bench());
+    // Simula reload: serializa e revive como entidade.
+    const raw = JSON.parse(JSON.stringify(workout));
+    const reloaded = Workout.revive(raw);
+    expect(reloaded).toBeInstanceOf(Workout);
+    expect(reloaded.totalVolume()).toBe(600);
   });
 });

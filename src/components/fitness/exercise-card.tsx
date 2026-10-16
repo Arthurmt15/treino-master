@@ -21,9 +21,16 @@ export function ExerciseCard({ exercise, onAdd }: Props) {
     <article className="overflow-hidden rounded-xl border border-border bg-card">
       {/* GIF demonstrativo (lazy, sem autoplay forcado na lista). */}
       {exercise.gifUrl ? (
-        <img src={exercise.gifUrl} alt={exercise.name} loading="lazy" className="aspect-square w-full object-cover" />
+        <img
+          src={exercise.gifUrl}
+          alt={exercise.name}
+          loading="lazy"
+          className="aspect-square w-full object-cover"
+        />
       ) : (
-        <div className="flex aspect-square items-center justify-center text-xs text-muted-foreground">Sem imagem</div>
+        <div className="flex aspect-square items-center justify-center text-xs text-muted-foreground">
+          Sem imagem
+        </div>
       )}
       <div className="space-y-1 p-2">
         {/* Nome original da API (EN na v1). */}
@@ -33,7 +40,13 @@ export function ExerciseCard({ exercise, onAdd }: Props) {
           {muscle ? pt(BODY_PARTS_PT, muscle) : "—"} · {equip ? pt(EQUIPMENT_PT, equip) : "Livre"}
         </p>
         {/* Adiciona a ficha ativa (abre bottom-sheet na pagina). */}
-        <Button size="sm" variant="secondary" className="w-full" onClick={() => onAdd(exercise)} aria-label={`Adicionar ${exercise.name}`}>
+        <Button
+          size="sm"
+          variant="secondary"
+          className="w-full"
+          onClick={() => onAdd(exercise)}
+          aria-label={`Adicionar ${exercise.name}`}
+        >
           <Plus size={14} /> Adicionar
         </Button>
       </div>

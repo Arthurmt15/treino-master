@@ -116,3 +116,78 @@ export async function deleteWorkoutById(workoutId: string): Promise<void> {
   if (!sb) return;
   await sb.from("workouts").delete().eq("id", workoutId);
 }
+
+// Renomeia a ficha.
+export async function renameWorkout(workoutId: string, name: string): Promise<void> {
+  const sb = await getSupabase();
+  if (!sb) return;
+  await sb.from("workouts").update({ name }).eq("id", workoutId);
+}
+
+// Monta apenas as colunas presentes no patch (camel -> snake).
+function patchColumns(patch: Partial<NewWorkoutItem>): Record<string, unknown> {
+  const cols: Record<string, unknown> = {};
+  if (patch.name !== undefined) cols["name"] = patch.name;
+  if (patch.gifUrl !== undefined) cols["gif_url"] = patch.gifUrl || null;
+  if (patch.sets !== undefined) cols["sets"] = patch.sets;
+  if (patch.reps !== undefined) cols["reps"] = patch.reps;
+  if (patch.weightKg !== undefined) cols["weight_kg"] = patch.weightKg;
+  if (patch.restSec !== undefined) cols["rest_sec"] = patch.restSec;
+  return cols;
+}
+
+// Edita um item da ficha (series/reps/peso/descanso/nome).
+export async function updateWorkoutItem(
+  workoutId: string,
+  exerciseId: string,
+  patch: Partial<NewWorkoutItem>,
+): Promise<void> {
+  const sb = await getSupabase();
+  if (!sb) return;
+  await sb
+    .from("workout_items")
+    .update(patchColumns(patch))
+    .eq("workout_id", workoutId)
+    .eq("exercise_id", exerciseId);
+}
+
+// Remove um item da ficha.
+export async function deleteWorkoutItem(workoutId: string, exerciseId: string): Promise<void> {
+  const sb = await getSupabase();
+  if (!sb) return;
+  await sb.from("workout_items").delete().eq("workout_id", workoutId).eq("exercise_id", exerciseId);
+}
+
+// Cria ou atualiza um item com os valores exatos (editor de ficha).
+export async function upsertWorkoutItem(workoutId: string, data: NewWorkoutItem): Promise<void> {
+  const sb = await getSupabase();
+  if (!sb) return;
+  const { data: existing } = await sb
+    .from("workout_items")
+    .select("id")
+    .eq("workout_id", workoutId)
+    .eq("exercise_id", data.exerciseId)
+    .maybeSingle();
+  if (existing) {
+    await sb
+      .from("workout_items")
+      .update(patchColumns(data))
+      .eq("id", existing.id as string);
+    return;
+  }
+  const { count } = await sb
+    .from("workout_items")
+    .select("id", { count: "exact", head: true })
+    .eq("workout_id", workoutId);
+  await sb.from("workout_items").insert({
+    workout_id: workoutId,
+    exercise_id: data.exerciseId,
+    name: data.name,
+    gif_url: data.gifUrl || null,
+    sets: data.sets,
+    reps: data.reps,
+    weight_kg: data.weightKg,
+    rest_sec: data.restSec,
+    position: count ?? 0,
+  });
+}

@@ -80,12 +80,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "forma. — Seu espaço de treino" },
       { name: "description", content: "Seu app pessoal de academia, treinos e evolução." },
-      
+
       { property: "og:title", content: "forma. — Seu espaço de treino" },
       { property: "og:description", content: "Seu app pessoal de academia, treinos e evolução." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      
     ],
     links: [
       {
@@ -93,7 +92,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         href: appCss,
       },
       { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap",
+      },
     ],
   }),
   shellComponent: RootShell,

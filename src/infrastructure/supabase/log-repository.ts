@@ -6,8 +6,10 @@ import { getSupabase } from "@/infrastructure/supabase/client";
 export type WorkoutLog = {
   id: string;
   title: string;
-  date: string; // data ja formatada (ex: "Hoje, 15 out")
+  date: string; // data ja formatada (ex: "15 out")
+  finishedAt: string | null; // ISO cru (streak/meta usam a data real)
   duration: string; // ex: "55 min"
+  durationMin: number; // minutos numericos (soma nos stats)
   exercises: number;
 };
 
@@ -53,7 +55,9 @@ export async function fetchWorkoutLogs(userId: string): Promise<WorkoutLog[]> {
     id: row.id,
     title: row.title ?? "Treino",
     date: formatDate(row.finished_at),
+    finishedAt: row.finished_at,
     duration: row.duration_min ? `${row.duration_min} min` : "—",
+    durationMin: row.duration_min ?? 0,
     exercises: row.exercises ?? 0,
   }));
 }

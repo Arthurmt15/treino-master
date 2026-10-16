@@ -1,15 +1,21 @@
-// Builder de treino próprio: nome da ficha + lista de exercícios (séries/reps/peso/descanso).
+// Builder de treino próprio: nome da ficha + exercícios (manual ou catálogo).
 // Entrega nome + itens ao salvar; quem persiste é o hook use-custom-workouts.
 import { useState } from "react";
-import { Check, Plus, Trash2, X } from "lucide-react";
+import { Check, Plus, Search, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ExercisePicker } from "@/components/fitness/exercise-picker";
 import type { NewWorkoutItem } from "@/domain/training/workout";
+import type { Exercise } from "@/domain/catalog/exercise";
 
 // Dados que o builder devolve ao salvar a ficha.
 export type DraftWorkout = { name: string; items: NewWorkoutItem[] };
-// Props: salvar a ficha pronta ou cancelar a criação.
-type Props = { onSave: (draft: DraftWorkout) => void; onCancel: () => void };
-// Campos do formulário de um exercício.
+// Props: salvar/cancelar + itens iniciais (vindos do catálogo).
+type Props = {
+  onSave: (draft: DraftWorkout) => void;
+  onCancel: () => void;
+  initialItems?: NewWorkoutItem[] | undefined;
+};
+// Campos do formulário de um exercício digitado à mão.
 type ExerciseForm = { name: string; sets: string; reps: string; weightKg: string; restSec: string };
 // Valores iniciais do formulário (3x10-12, peso corporal, 60s).
 const EMPTY_EXERCISE: ExerciseForm = {
@@ -20,26 +26,32 @@ const EMPTY_EXERCISE: ExerciseForm = {
   restSec: "60",
 };
 
-// Gera id único p/ exercício digitado (o domínio soma série se o id repetir).
+// Gera id único p/ exercício digitado à mão (não deduplica por nome).
 function customId(): string {
   return `custom_${Date.now().toString(36)}_${Math.floor(Math.random() * 1e6)}`;
 }
 
+// Adiciona somando série se o id já existir (evita item duplicado).
+function mergeItem(prev: NewWorkoutItem[], item: NewWorkoutItem): NewWorkoutItem[] {
+  const found = prev.find((i) => i.exerciseId === item.exerciseId);
+  if (found)
+    return prev.map((i) => (i.exerciseId === item.exerciseId ? { ...i, sets: i.sets + 1 } : i));
+  return [...prev, item];
+}
+
 // Monta o formulário de criação da ficha própria.
-export function CustomWorkoutBuilder({ onSave, onCancel }: Props) {
-  // Nome da ficha (ex.: "Meu treino de pernas").
-  const [name, setName] = useState("");
-  // Exercícios já adicionados à ficha.
-  const [items, setItems] = useState<NewWorkoutItem[]>([]);
-  // Campos do exercício sendo digitado.
-  const [form, setForm] = useState<ExerciseForm>(EMPTY_EXERCISE);
+export function CustomWorkoutBuilder({ onSave, onCancel, initialItems = [] }: Props) {
+  const [name, setName] = useState(""); // Nome da ficha.
+  const [items, setItems] = useState<NewWorkoutItem[]>(initialItems); // Exercícios da ficha.
+  const [form, setForm] = useState<ExerciseForm>(EMPTY_EXERCISE); // Exercício sendo digitado.
+  const [showCatalog, setShowCatalog] = useState(false); // Picker do catálogo aberto?
+  const [hint, setHint] = useState(""); // Aviso curto (ex.: exercício somado).
 
   // Adiciona o exercício digitado à lista (exige nome).
   function addItem(): void {
     if (!form.name.trim()) return;
-    setItems((prev) => [
-      ...prev,
-      {
+    setItems((prev) =>
+      mergeItem(prev, {
         exerciseId: customId(),
         name: form.name.trim(),
         gifUrl: "",
@@ -47,9 +59,28 @@ export function CustomWorkoutBuilder({ onSave, onCancel }: Props) {
         reps: form.reps.trim() || "10-12",
         weightKg: Math.max(0, parseFloat(form.weightKg.replace(",", ".")) || 0),
         restSec: Math.max(0, parseInt(form.restSec, 10) || 60),
-      },
-    ]);
+      }),
+    );
     setForm(EMPTY_EXERCISE);
+  }
+
+  // Adiciona um exercício escolhido no catálogo (id real => deduplica).
+  function addFromCatalog(exercise: Exercise): void {
+    const already = items.some((i) => i.exerciseId === exercise.exerciseId);
+    setItems((prev) =>
+      mergeItem(prev, {
+        exerciseId: exercise.exerciseId,
+        name: exercise.name,
+        gifUrl: exercise.gifUrl,
+        sets: 3,
+        reps: "10-12",
+        weightKg: 0,
+        restSec: 60,
+      }),
+    );
+    setHint(
+      already ? "Exercício já estava na ficha — somei 1 série." : `${exercise.name} adicionado.`,
+    );
   }
 
   // Remove exercício da lista pelo id.
@@ -102,7 +133,15 @@ export function CustomWorkoutBuilder({ onSave, onCancel }: Props) {
           ))}
         </ul>
       )}
-      {/* Formulário do próximo exercício */}
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+      {/* Alterna a busca no catálogo da API. */}
+      <div className="flex gap-3">
+        <Button variant="secondary" type="button" onClick={() => setShowCatalog((v) => !v)}>
+          <Search size={14} /> {showCatalog ? "Fechar catálogo" : "Buscar no catálogo"}
+        </Button>
+      </div>
+      {showCatalog && <ExercisePicker onPick={addFromCatalog} />}
+      {/* Formulário do próximo exercício (digitação manual) */}
       <div className="profile-fields">
         <label>
           Exercício
@@ -150,7 +189,6 @@ export function CustomWorkoutBuilder({ onSave, onCancel }: Props) {
           />
         </label>
       </div>
-      {/* Ações: adicionar exercício, salvar ficha ou cancelar */}
       <div className="flex gap-3">
         <Button variant="outline" type="button" onClick={addItem} disabled={!form.name.trim()}>
           <Plus size={14} /> Adicionar exercício

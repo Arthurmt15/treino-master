@@ -5,9 +5,13 @@ import { useAuth } from "@/hooks/use-auth";
 import { ensureProfile } from "@/infrastructure/supabase/profile-repository";
 import {
   deleteWorkoutById,
+  deleteWorkoutItem,
   fetchWorkouts,
   insertWorkout,
   insertWorkoutItem,
+  renameWorkout as renameWorkoutRow,
+  updateWorkoutItem,
+  upsertWorkoutItem,
 } from "@/infrastructure/supabase/workout-repository";
 import type { NewWorkoutItem, Workout } from "@/domain/training/workout";
 
@@ -74,5 +78,49 @@ export function useCustomWorkouts() {
     setWorkouts((prev) => prev.filter((w) => w.id !== workoutId));
   }, []);
 
-  return { workouts, createWorkout, addExercise, deleteWorkout, reload, loading };
+  // Edita um exercicio da ficha e recarrega.
+  const updateExercise = useCallback(
+    async (
+      workoutId: string,
+      exerciseId: string,
+      patch: Partial<NewWorkoutItem>,
+    ): Promise<void> => {
+      await updateWorkoutItem(workoutId, exerciseId, patch);
+    },
+    [],
+  );
+
+  // Remove um exercicio da ficha e recarrega.
+  const removeExercise = useCallback(
+    async (workoutId: string, exerciseId: string): Promise<void> => {
+      await deleteWorkoutItem(workoutId, exerciseId);
+    },
+    [],
+  );
+
+  // Cria/atualiza um exercicio com valores exatos (editor de ficha).
+  const upsertExercise = useCallback(
+    async (workoutId: string, data: NewWorkoutItem): Promise<void> => {
+      await upsertWorkoutItem(workoutId, data);
+    },
+    [],
+  );
+
+  // Renomeia a ficha.
+  const renameWorkout = useCallback(async (workoutId: string, name: string): Promise<void> => {
+    await renameWorkoutRow(workoutId, name.trim() || "Meu treino");
+  }, []);
+
+  return {
+    workouts,
+    createWorkout,
+    addExercise,
+    deleteWorkout,
+    updateExercise,
+    removeExercise,
+    upsertExercise,
+    renameWorkout,
+    reload,
+    loading,
+  };
 }

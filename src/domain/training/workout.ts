@@ -28,8 +28,14 @@ export class WorkoutItem {
   /** Fabrica a partir de dados de entrada + posicao na ficha. */
   static fromData(data: NewWorkoutItem, position: number): WorkoutItem {
     return new WorkoutItem(
-      data.exerciseId, data.name, data.gifUrl, data.sets,
-      data.reps, data.weightKg, data.restSec, position,
+      data.exerciseId,
+      data.name,
+      data.gifUrl,
+      data.sets,
+      data.reps,
+      data.weightKg,
+      data.restSec,
+      position,
     );
   }
 

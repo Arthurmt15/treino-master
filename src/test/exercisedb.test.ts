@@ -67,7 +67,17 @@ describe("ExerciseCatalog", () => {
   it("filtra em memoria delegando a matches()", () => {
     const items = [
       Exercise.fromRaw(rawBench(), 0),
-      Exercise.fromRaw({ ...rawBench(), exerciseId: "o1", name: "bodyweight squat", bodyParts: ["legs"], targetMuscles: ["quadriceps"], equipments: ["bodyweight"] }, 1),
+      Exercise.fromRaw(
+        {
+          ...rawBench(),
+          exerciseId: "o1",
+          name: "bodyweight squat",
+          bodyParts: ["legs"],
+          targetMuscles: ["quadriceps"],
+          equipments: ["bodyweight"],
+        },
+        1,
+      ),
     ];
     const catalog = new ExerciseCatalog(vi.fn() as unknown as typeof fetch);
     expect(catalog.filter(items, "squat", "", "")).toHaveLength(1);

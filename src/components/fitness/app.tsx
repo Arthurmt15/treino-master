@@ -1,88 +1,284 @@
-import { Link } from '@tanstack/react-router';
-import { useEffect, useState, type ReactNode } from 'react';
-import { Activity, ArrowDownRight, ArrowRight, Bell, CalendarDays, Check, ChevronDown, ChevronRight, Clock3, Dumbbell, Flame, GlassWater, Heart, LayoutGrid, LogIn, LogOut, Moon, Play, Plus, Settings2, Sun, Target, Trash2, TrendingUp, Trophy, UserRound, Weight, X } from 'lucide-react';
-import { useAuth } from '@/hooks/use-auth'; // Sessão Google (nome/avatar/entrar/sair).
-import { useProfile } from '@/hooks/use-profile'; // Perfil da conta no banco.
-import { useWorkoutLogs } from '@/hooks/use-workout-logs'; // Histórico no banco.
-import { useWeightLogs } from '@/hooks/use-weight-logs'; // Evolução de peso no banco.
-import { useCustomWorkouts } from '@/hooks/use-custom-workouts'; // Fichas próprias no banco.
-import { CustomWorkoutBuilder, type DraftWorkout } from '@/components/fitness/custom-workout-builder'; // Form de montar ficha.
-import { Button } from '@/components/ui/button';
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import gymBanner from '@/assets/gym-banner.jpg';
+// Shell do app (sidebar + topo) e roteamento das abas.
+// Delega cada aba para um componente próprio; orquestra treino e modais.
 
-const navigation = [ { to: '/', label: 'Visão geral', icon: LayoutGrid }, { to: '/treinos', label: 'Meus treinos', icon: Dumbbell }, { to: '/evolucao', label: 'Evolução', icon: TrendingUp }, { to: '/historico', label: 'Histórico', icon: CalendarDays }, { to: '/perfil', label: 'Meu perfil', icon: UserRound } ] as const;
-const plans = [ { letter: 'A', title: 'Peito & tríceps', desc: 'Um passo mais perto da sua melhor versão.', exercises: ['Supino reto com barra', 'Supino inclinado com halteres', 'Crucifixo na máquina', 'Tríceps na polia', 'Tríceps francês', 'Flexão de braços'], duration: 55 }, { letter: 'B', title: 'Costas & bíceps', desc: 'Força e controle em cada repetição.', exercises: ['Puxada frontal', 'Remada curvada', 'Remada unilateral', 'Rosca direta', 'Rosca martelo'], duration: 50 }, { letter: 'C', title: 'Pernas & ombros', desc: 'Uma base forte para ir mais longe.', exercises: ['Agachamento livre', 'Leg press', 'Cadeira extensora', 'Mesa flexora', 'Desenvolvimento', 'Elevação lateral'], duration: 60 } ];
-type HistoryRow = { title: string; date: string; duration: string; exercises: number };
-type WeightPoint = { date: string; weight: number };
+import { useEffect, useState, type ReactNode } from "react";
+import { Flame, GlassWater, Heart } from "lucide-react";
+import { Sidebar } from "@/components/fitness/sidebar";
+import { Topbar } from "@/components/fitness/topbar";
+import { useAuth } from "@/hooks/use-auth"; // Sessão Google (nome/avatar/entrar/sair).
+import { useProfile } from "@/hooks/use-profile"; // Perfil da conta no banco.
+import { useWorkoutLogs } from "@/hooks/use-workout-logs"; // Histórico no banco.
+import { useWeightLogs } from "@/hooks/use-weight-logs"; // Evolução de peso no banco.
+import { Modal, RecentList, SectionTitle, Stats } from "@/components/fitness/dashboard-widgets";
+import { OverviewView } from "@/components/fitness/overview-view";
+import { ProgressView } from "@/components/fitness/progress-view";
+import { ProfileView } from "@/components/fitness/profile-view";
+import { CustomWorkoutsPanel } from "@/components/fitness/custom-workouts-panel";
+import { WorkoutSessionModal, type SessionRow } from "@/components/fitness/workout-session-modal";
+import { currentStreak } from "@/components/fitness/dashboard-data";
+import { PLANS } from "@/components/fitness/plans";
+import type { Workout } from "@/domain/training/workout";
 
-export function FitnessApp({ view = 'overview', children }: { view?: 'overview' | 'workouts' | 'progress' | 'history' | 'profile'; children?: ReactNode }) {
+// Chave da aba atual (inclui o catálogo de exercícios).
+type View = "overview" | "workouts" | "progress" | "history" | "profile" | "catalog";
+
+// Casca visual do app de treino.
+export function FitnessApp({ view = "overview", children }: { view?: View; children?: ReactNode }) {
   const [dark, setDark] = useState(true);
   const [water, setWater] = useState(6);
-  const [activePlan, setActivePlan] = useState<number | null>(null);
-  const [checked, setChecked] = useState<number[]>([]);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState("");
   const [notifications, setNotifications] = useState(false);
+  const [activePlan, setActivePlan] = useState<number | null>(null); // Índice do treino pronto.
+  const [activeCustom, setActiveCustom] = useState<Workout | null>(null); // Ficha própria em execução.
   const { status: authStatus, user, logout } = useAuth(); // Estado da conta Google logada.
   const { profile, setProfile, save: saveProfile } = useProfile(); // Perfil da conta (banco).
   const { logs, addLog } = useWorkoutLogs(); // Histórico da conta (banco).
   const { points: weightPoints, addWeight } = useWeightLogs(); // Pesos da conta (banco).
-  const history = logs; // Histórico exibido (vindo do banco).
+  const streak = currentStreak(logs); // Sequência real de dias treinados.
+
   // Edição local de um campo do perfil (persiste no salvar).
-  function updateProfile(patch: Partial<typeof profile>) { setProfile({ ...profile, ...patch }); }
+  function updateProfile(patch: Partial<typeof profile>) {
+    setProfile({ ...profile, ...patch });
+  }
   // Prefere o nome salvo; cai no nome do Google, e-mail ou genérico.
-  const displayName = profile.name || (user?.user_metadata?.["full_name"] as string | undefined) || user?.email || 'Atleta';
-  const initials = displayName.trim().split(/\s+/).map((p: string) => p[0]).slice(0, 2).join('').toUpperCase(); // Iniciais p/ o avatar.
-  useEffect(() => { const theme = localStorage.getItem('forma-theme'); if (theme) setDark(theme === 'dark'); }, []);
-  function changeTheme(value: boolean) { setDark(value); localStorage.setItem('forma-theme', value ? 'dark' : 'light'); }
-  function startWorkout(index: number) { setActivePlan(index); setActiveCustomId(null); setChecked([]); setMessage(''); }
-  const current = activePlan === null ? undefined : plans[activePlan];
-  const { workouts, createWorkout, addExercise, deleteWorkout, reload: reloadWorkouts } = useCustomWorkouts(); // Fichas próprias (banco).
-  const [building, setBuilding] = useState(false); // Builder de ficha aberto/visível.
-  const [activeCustomId, setActiveCustomId] = useState<string | null>(null); // Treino próprio em execução.
-  const activeCustom = activeCustomId ? workouts.find((w) => w.id === activeCustomId) : undefined; // Entidade em execução.
-  function startCustomWorkout(id: string) { setActiveCustomId(id); setActivePlan(null); setChecked([]); setMessage(''); } // Inicia ficha própria.
-  async function saveCustomWorkout(draft: DraftWorkout) { const created = await createWorkout(draft.name); if (!created) return; for (const item of draft.items) await addExercise(created.id, item); await reloadWorkouts(); setBuilding(false); setMessage('Treino criado. Bora treinar!'); } // Persiste a ficha montada no banco.
-  const titles = { overview: 'Visão geral', workouts: 'Meus treinos', progress: 'Evolução', history: 'Histórico', profile: 'Meu perfil' };
-  function finishWorkout() { if (activeCustom) { void addLog({ title: activeCustom.name, durationMin: activeCustom.items.length * 5, exercises: activeCustom.items.length, workoutId: activeCustom.id }); setActiveCustomId(null); setMessage('Treino concluído. Mandou bem!'); return; } if (!current) return; void addLog({ title: current.title, durationMin: current.duration, exercises: current.exercises.length }); setActivePlan(null); setMessage('Treino concluído. Mandou bem!'); }
-  return <div className={`app ${dark ? 'dark' : 'light'}`}>
-    <aside className="sidebar">
-      <Brand />
-      <div className="nav-caption">SEU ESPAÇO</div>
-      <nav aria-label="Navegação principal">{navigation.map(({ to, label, icon: Icon }) => <Link key={to} to={to} className="nav-link" activeProps={{ className: 'nav-link active' }} activeOptions={{ exact: true }}><Icon /><span>{label}</span></Link>)}</nav>
-      <div className="sidebar-bottom">
-        <Link to="/perfil" className="nav-link"><Settings2 /><span>Preferências</span></Link>
-        {authStatus === 'authenticated' ? (
-          <button type="button" className="nav-link w-full" onClick={() => logout()}><LogOut /><span>Sair</span></button>
-        ) : (
-          <Link to="/login" className="nav-link"><LogIn /><span>Entrar com Google</span></Link>
-        )}
-        <div className="theme-switch" aria-label="Aparência"><Button variant="ghost" className={!dark ? 'selected' : ''} onClick={() => changeTheme(false)} aria-label="Modo claro"><Sun /><span>Claro</span></Button><Button variant="ghost" className={dark ? 'selected' : ''} onClick={() => changeTheme(true)} aria-label="Modo escuro"><Moon /><span>Escuro</span></Button></div>
-        <Link to="/perfil" className="sidebar-user"><div className="avatar">{initials || 'AM'}</div><div><strong>{displayName}</strong><small>{authStatus === 'authenticated' ? (user?.email ?? 'Conta Google conectada.') : 'Um dia de cada vez.'}</small></div><ChevronRight size={14} /></Link>
+  const displayName =
+    profile.name ||
+    (user?.user_metadata?.["full_name"] as string | undefined) ||
+    user?.email ||
+    "Atleta";
+  const initials = displayName
+    .trim()
+    .split(/\s+/)
+    .map((p: string) => p[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
+  // Carrega o tema salvo (claro/escuro) ao abrir.
+  useEffect(() => {
+    const theme = localStorage.getItem("forma-theme");
+    if (theme) setDark(theme === "dark");
+  }, []);
+  function changeTheme(value: boolean) {
+    setDark(value);
+    localStorage.setItem("forma-theme", value ? "dark" : "light");
+  }
+  function notify(text: string) {
+    setMessage(text);
+  }
+  // Inicia um treino pronto (A/B/C) ou uma ficha própria.
+  function startPlan(index: number) {
+    setActivePlan(index);
+    setActiveCustom(null);
+  }
+  function startCustom(workout: Workout) {
+    setActiveCustom(workout);
+    setActivePlan(null);
+  }
+  // Registra o treino concluído no histórico e fecha a sessão.
+  function finishWorkout() {
+    if (activeCustom) {
+      void addLog({
+        title: activeCustom.name,
+        durationMin: activeCustom.items.length * 5,
+        exercises: activeCustom.items.length,
+        workoutId: activeCustom.id,
+      });
+      setActiveCustom(null);
+      notify("Treino concluído. Mandou bem!");
+      return;
+    }
+    if (activePlan === null) return;
+    const plan = PLANS[activePlan];
+    if (!plan) return;
+    void addLog({
+      title: plan.title,
+      durationMin: plan.duration,
+      exercises: plan.exercises.length,
+    });
+    setActivePlan(null);
+    notify("Treino concluído. Mandou bem!");
+  }
+  // Salva o perfil e o peso atual na nuvem.
+  function saveProfileAndWeight() {
+    void saveProfile(profile);
+    if (profile.weightKg) void addWeight(profile.weightKg);
+    notify("Preferências salvas na nuvem.");
+  }
+
+  const titles: Record<View, string> = {
+    overview: "Visão geral",
+    workouts: "Meus treinos",
+    progress: "Evolução",
+    history: "Histórico",
+    profile: "Meu perfil",
+    catalog: "Exercícios",
+  };
+  const subheadings: Record<View, string> = {
+    overview: "Cada treino conta. Hoje é mais uma chance de evoluir.",
+    workouts: "Seu plano, seu ritmo. O próximo passo começa aqui.",
+    progress: "Pequenos avanços. Grandes mudanças.",
+    history: "Todo esforço faz parte da sua história.",
+    profile: "Seu espaço, do seu jeito.",
+    catalog: "Explore o catálogo e monte sua ficha.",
+  };
+  // Linhas da sessão de treino (plano pronto ou ficha própria).
+  const plan = activePlan !== null ? PLANS[activePlan] : undefined;
+  const sessionTitle = activeCustom
+    ? activeCustom.name
+    : plan
+      ? `Treino ${plan.letter} · ${plan.title}`
+      : "";
+  const sessionSummary = activeCustom
+    ? `${activeCustom.items.length} exercícios · ~${activeCustom.items.length * 5} min`
+    : plan
+      ? `${plan.exercises.length} exercícios · ${plan.duration} min`
+      : "";
+  const sessionRows: SessionRow[] = activeCustom
+    ? activeCustom.items.map((item) => ({
+        key: item.exerciseId,
+        title: item.name,
+        sub: `${item.sets} séries · ${item.reps} repetições · ${item.restSec}s de descanso`,
+        restSec: item.restSec,
+      }))
+    : (plan?.exercises ?? []).map((exercise) => ({
+        key: exercise,
+        title: exercise,
+        sub: "3 séries · 10–12 repetições · 60s de descanso",
+        restSec: 60,
+      }));
+
+  return (
+    <div className={`app ${dark ? "dark" : "light"}`}>
+      <Sidebar
+        displayName={displayName}
+        initials={initials}
+        email={user?.email ?? null}
+        authenticated={authStatus === "authenticated"}
+        dark={dark}
+        onChangeTheme={changeTheme}
+        onLogout={() => logout()}
+      />
+      <div className="main">
+        <Topbar
+          title={titles[view]}
+          initials={initials}
+          dark={dark}
+          onToggleTheme={() => changeTheme(!dark)}
+          onNotifications={() => setNotifications(true)}
+        />
+        <main className="content">
+          <div className="page-heading">
+            <div>
+              <h1>
+                {view === "overview" ? `Vamos pra cima, ${displayName}` : titles[view]}
+                {view === "overview" && <span className="text-primary">.</span>}
+              </h1>
+              <p className="subheading">{subheadings[view]}</p>
+            </div>
+            {view === "overview" && (
+              <div className="streak">
+                <Flame size={16} />
+                <strong>
+                  {streak > 0 ? `${streak} dia(s) em sequência` : "Comece sua sequência"}
+                </strong>
+              </div>
+            )}
+          </div>
+          {message && (
+            <p className="notice" role="status">
+              {message}
+            </p>
+          )}
+          {(view === "overview" || view === "progress") && (
+            <Stats history={logs} weightKg={profile.weightKg} weeklyTarget={profile.weeklyTarget} />
+          )}
+          {view === "overview" && (
+            <OverviewView
+              logs={logs}
+              weightKg={profile.weightKg}
+              weightPoints={weightPoints}
+              weeklyTarget={profile.weeklyTarget}
+              water={water}
+              onAddWater={() => setWater(Math.min(10, water + 1))}
+              onStartPlan={startPlan}
+            />
+          )}
+          {view === "workouts" && (
+            <CustomWorkoutsPanel onStart={startCustom} onNotify={notify} onStartPlan={startPlan} />
+          )}
+          {view === "progress" && (
+            <ProgressView
+              logs={logs}
+              weightPoints={weightPoints}
+              weightKg={profile.weightKg}
+              weeklyTarget={profile.weeklyTarget}
+            />
+          )}
+          {view === "history" && (
+            <div className="history-full">
+              <SectionTitle title="Histórico" aside={`${logs.length} treinos registrados`} />
+              <RecentList rows={logs} />
+            </div>
+          )}
+          {view === "profile" && (
+            <ProfileView
+              profile={profile}
+              onField={updateProfile}
+              onSave={saveProfileAndWeight}
+              displayName={displayName}
+              initials={initials || "AM"}
+              authenticated={authStatus === "authenticated"}
+              email={user?.email ?? null}
+              onLogout={() => logout()}
+              dark={dark}
+              onTheme={changeTheme}
+            />
+          )}
+          {children}
+          <footer className="footer">
+            <span>
+              <Heart size={11} />
+              Feito para a sua melhor versão.
+            </span>
+            <span>O progresso é pessoal. Continue.</span>
+          </footer>
+        </main>
       </div>
-    </aside>
-    <div className="main">
-      <header className="topbar"><div className="breadcrumb">Meu espaço<ChevronRight size={12} /><strong>{titles[view]}</strong></div><div className="mobile-brand"><Brand /></div><div className="top-actions"><span className="date"><CalendarDays size={14} />Quinta-feira, 15 de outubro</span><Button className="relative" size="icon" variant="ghost" aria-label="Notificações" onClick={() => setNotifications(true)}><Bell size={18} /><i className="notification-dot" /></Button><Button size="icon" variant="ghost" aria-label={dark ? 'Modo claro' : 'Modo escuro'} title={dark ? 'Modo claro' : 'Modo escuro'} onClick={() => changeTheme(!dark)}>{dark ? <Sun /> : <Moon />}</Button><Link to="/perfil" className="avatar" aria-label="Meu perfil">AM</Link></div></header>
-      <main className="content">
-        <div className="page-heading"><div><h1>{view === 'overview' ? `Vamos pra cima, ${displayName}` : titles[view]}{view === 'overview' && <span className="text-primary">.</span>}</h1><p className="subheading">{view === 'overview' ? 'Cada treino conta. Hoje é mais uma chance de evoluir.' : view === 'workouts' ? 'Seu plano, seu ritmo. O próximo passo começa aqui.' : view === 'progress' ? 'Pequenos avanços. Grandes mudanças.' : view === 'history' ? 'Todo esforço faz parte da sua história.' : 'Seu espaço, do seu jeito.'}</p></div>{view === 'overview' && <div className="streak"><Flame size={16} /><strong>3 dias em sequência</strong></div>}</div>
-        {message && <p className="notice" role="status">{message}</p>}
-        {(view === 'overview' || view === 'progress') && <Stats history={history} weightKg={profile.weightKg} />}
-        {view === 'overview' && <><div className="middle-grid"><section className="workout-hero"><img src={gymBanner} alt="Halteres e equipamentos de uma academia" width={1536} height={1024} /><div className="hero-content"><div className="eyebrow"><span className="size-1.5 rounded-full bg-primary" /> SEU TREINO DE HOJE</div><h2>Peito & tríceps</h2><p>Construa força. Supere seus limites.</p><div className="hero-meta"><span><Dumbbell />Treino A</span><span><Clock3 />55 min</span><span><Activity />6 exercícios</span></div><Button onClick={() => startWorkout(0)}><Play size={14} fill="currentColor" />Iniciar treino<ArrowRight size={14} /></Button></div></section><section className="week-panel"><SectionTitle title="Sua semana" aside="12 – 18 out" /><div className="week-days">{['SEG','TER','QUA','QUI','SEX','SÁB','DOM'].map((day,index) => <div key={day} className={`day ${index === 3 ? 'today' : ''}`}><small>{day}</small><strong>{12 + index}</strong>{index < 3 ? <Check /> : <span className="day-dot" />}</div>)}</div><div className="week-progress"><span>Meta semanal</span><strong>3 de 5 treinos</strong></div><div className="progress-track"><div className="progress-fill" /></div><div className="water"><div className="water-top"><div className="water-title"><GlassWater />Hidratação</div><span className="water-value"><strong>{(water * .25).toFixed(1).replace('.', ',')} L</strong> / 2,5 L</span></div><div className="water-bottom"><div className="water-glasses">{Array.from({ length: 10 },(_,i) => <GlassWater key={i} className={i < water ? 'filled' : ''} />)}</div><Button variant="secondary" aria-label="Adicionar 250 ml de água" disabled={water >= 10} onClick={() => setWater(Math.min(10,water + 1))}><Plus size={12} />250 ml</Button></div></div></section></div><div className="bottom-grid"><section><SectionTitle title="Sua evolução" to="/evolucao" /><WeightChart points={weightPoints} current={profile.weightKg} /></section><section><SectionTitle title="Últimos treinos" to="/historico" /><RecentList rows={history.slice(0,3)} /></section></div></>}
-        {view === 'workouts' && <><div className="stat mb-5 flex flex-wrap items-center justify-between gap-3"><div><strong className="text-sm">Meus treinos</strong><p className="text-xs text-muted-foreground mt-1">{workouts.length === 0 ? 'Monte sua própria ficha e treine do seu jeito.' : `${workouts.length} ficha(s) criada(s) por você.`}</p></div><Button type="button" onClick={() => setBuilding(!building)}><Plus size={14} />{building ? 'Fechar' : 'Montar meu treino'}</Button></div>{building && <div className="plan-grid mb-5"><CustomWorkoutBuilder onSave={saveCustomWorkout} onCancel={() => setBuilding(false)} /></div>}{workouts.length > 0 && <div className="plan-grid mb-5">{workouts.map((w) => <article className="plan-card" key={w.id}><span className="plan-letter">★</span><h2>{w.name}</h2><p>{w.items.length} exercício(s) · ~{w.items.length * 5} min</p><ul>{w.items.map((item) => <li key={item.exerciseId}>{item.name} · {item.sets}x{item.reps}</li>)}</ul><div className="flex gap-3"><Button onClick={() => startCustomWorkout(w.id)}><Play />Iniciar treino</Button><Button variant="outline" aria-label={`Apagar ${w.name}`} onClick={() => deleteWorkout(w.id)}><Trash2 /></Button></div></article>)}</div>}<SectionTitle title="Treinos prontos" aside="Para começar já" /><div className="plan-grid">{plans.map((plan,index) => <article className="plan-card" key={plan.letter}><span className="plan-letter">{plan.letter}</span><h2>{plan.title}</h2><p>{plan.desc}</p><div className="hero-meta text-muted-foreground"><span><Clock3 />{plan.duration} min</span><span><Dumbbell />{plan.exercises.length} exercícios</span></div><ul>{plan.exercises.map(ex => <li key={ex}>{ex}</li>)}</ul><Button onClick={() => startWorkout(index)}><Play />Iniciar treino</Button></article>)}</div></>}
-        {view === 'progress' && <><SectionTitle title="Peso corporal" aside="Seu progresso nos últimos 30 dias" /><WeightChart points={weightPoints} current={profile.weightKg} /><div className="mt-8"><SectionTitle title="Suas conquistas" /><div className="stats-grid">{[{ icon: Trophy, title: 'Primeiro passo', text: 'Primeiro treino concluído' },{ icon: Flame, title: 'No ritmo', text: '3 dias consecutivos' },{ icon: Target, title: 'Consistência', text: '12 treinos neste mês' },{ icon: Weight, title: 'Mais leve', text: '1,4 kg de evolução' }].map(({icon: Icon,title,text}) => <article className="stat" key={title}><Icon className="text-primary mb-4" /><strong className="text-sm">{title}</strong><p className="text-xs text-muted-foreground mt-2">{text}</p></article>)}</div></div></>}
-        {view === 'history' && <div className="history-full"><SectionTitle title="Histórico" aside={`${history.length} treinos registrados`} /><RecentList rows={history} /></div>}
-        {view === 'profile' && <><div className="stat mb-5 flex flex-wrap items-center justify-between gap-3"><div><strong className="text-sm">Conta Google</strong><p className="text-xs text-muted-foreground mt-1">{authStatus === 'authenticated' ? `Conectada como ${user?.email}` : 'Entre para salvar seus treinos na nuvem.'}</p></div>{authStatus === 'authenticated' ? <Button variant="outline" type="button" onClick={() => logout()}><LogOut />Sair</Button> : <Button type="button" asChild><Link to="/login"><LogIn />Entrar com Google</Link></Button>}</div><form className="profile-form" onSubmit={e => { e.preventDefault(); void saveProfile(profile); if (profile.weightKg) void addWeight(profile.weightKg); setMessage('Preferências salvas na nuvem.'); }}><div className="flex items-center gap-4"><div className="avatar size-16 text-lg">{initials || 'AM'}</div><div><strong>{displayName}</strong><p className="text-xs text-muted-foreground mt-1">Membro desde setembro de 2026</p></div></div><div className="profile-fields"><label>Nome<input value={profile.name} onChange={e => updateProfile({ name: e.target.value })} required /></label><label>Peso atual (kg)<input type="number" step="0.1" min="20" max="300" value={profile.weightKg ?? ''} onChange={e => updateProfile({ weightKg: e.target.value === '' ? null : Number(e.target.value) })} /></label><label>Altura (cm)<input type="number" min="80" max="250" value={profile.heightCm ?? ''} onChange={e => updateProfile({ heightCm: e.target.value === '' ? null : Number(e.target.value) })} /></label><label>Objetivo<select value={profile.goal} onChange={e => updateProfile({ goal: e.target.value })}><option>Hipertrofia</option><option>Emagrecimento</option><option>Condicionamento</option></select></label><label>Meta semanal<select value={String(profile.weeklyTarget)} onChange={e => updateProfile({ weeklyTarget: Number(e.target.value) })}><option value="3">3 treinos</option><option value="4">4 treinos</option><option value="5">5 treinos</option><option value="6">6 treinos</option></select></label></div><SectionTitle title="Aparência" /><div className="flex gap-3 mb-7"><Button variant={dark ? 'outline' : 'default'} onClick={() => changeTheme(false)} type="button"><Sun />Claro</Button><Button variant={dark ? 'default' : 'outline'} onClick={() => changeTheme(true)} type="button"><Moon />Escuro</Button></div><Button type="submit"><Check />Salvar preferências</Button></form></>}
-        {children}
-        <footer className="footer"><span><Heart size={11} />Feito para a sua melhor versão.</span><span>O progresso é pessoal. Continue.</span></footer>
-      </main>
+      {(activePlan !== null || activeCustom) && (
+        <WorkoutSessionModal
+          title={sessionTitle}
+          summary={sessionSummary}
+          rows={sessionRows}
+          onFinish={finishWorkout}
+          onClose={() => {
+            setActivePlan(null);
+            setActiveCustom(null);
+          }}
+        />
+      )}
+      {notifications && (
+        <Modal title="Notificações" onClose={() => setNotifications(false)}>
+          <div className="exercise-row">
+            <Flame className="text-primary" />
+            <div>
+              <strong>Você está no ritmo!</strong>
+              <small>
+                {streak > 0
+                  ? `${streak} dia(s) de treino em sequência. Continue assim.`
+                  : "Faça um treino hoje e comece sua sequência."}
+              </small>
+            </div>
+          </div>
+          <div className="exercise-row">
+            <GlassWater className="text-sky" />
+            <div>
+              <strong>Hora de se hidratar</strong>
+              <small>Sua meta de hoje é beber 2,5 litros de água.</small>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
-    {(current || activeCustom) && <Modal title={current ? `Treino ${current.letter} · ${current.title}` : (activeCustom?.name ?? 'Meu treino')} onClose={() => { setActivePlan(null); setActiveCustomId(null); }}><p>{checked.length} de {(current?.exercises.length ?? activeCustom?.items.length ?? 0)} exercícios concluídos · {current ? `${current.duration} min` : `~${(activeCustom?.items.length ?? 0) * 5} min`}</p>{(current ? current.exercises.map((exercise) => ({ key: exercise, title: exercise, sub: '3 séries · 10–12 repetições · 60s de descanso' })) : (activeCustom?.items.map((item) => ({ key: item.exerciseId, title: item.name, sub: `${item.sets} séries · ${item.reps} repetições · ${item.restSec}s de descanso` })) ?? [])).map((row,index) => <label className="exercise-row" key={row.key}><input type="checkbox" checked={checked.includes(index)} onChange={e => setChecked(e.target.checked ? [...checked,index] : checked.filter(i => i !== index))} /><div><strong>{row.title}</strong><small>{row.sub}</small></div></label>)}<Button className="modal-action" disabled={checked.length !== (current?.exercises.length ?? activeCustom?.items.length ?? 0)} onClick={finishWorkout}><Check />Concluir treino</Button></Modal>}
-    {notifications && <Modal title="Notificações" onClose={() => setNotifications(false)}><div className="exercise-row"><Flame className="text-primary" /><div><strong>Você está no ritmo!</strong><small>3 dias de treino em sequência. Continue assim.</small></div></div><div className="exercise-row"><GlassWater className="text-sky" /><div><strong>Hora de se hidratar</strong><small>Sua meta de hoje é beber 2,5 litros de água.</small></div></div></Modal>}
-  </div>;
+  );
 }
-function Brand() { return <div className="brand"><span className="brand-mark"><Dumbbell size={21} /></span><span className="brand-name">forma<span className="brand-dot">.</span></span></div>; }
-function Stats({history,weightKg}: {history: HistoryRow[];weightKg:number|null}) { const minutes = history.reduce((sum,row) => sum + (parseInt(row.duration,10) || 0),0); const hours = (minutes / 60).toFixed(1).replace('.', ','); const weight = weightKg ? weightKg.toFixed(1).replace('.', ',') : '—'; const meta = Math.min(100, Math.round((history.length / 16) * 100)); return <div className="stats-grid">{[{ label:'Treinos no mês',value:String(history.length),unit:'treinos',icon:Dumbbell,change:`${history.length}`,detail:'neste mês' },{ label:'Tempo de treino',value:hours,unit:'horas',icon:Clock3,change:`${minutes} min`,detail:'no total' },{ label:'Peso atual',value:weight,unit:'kg',icon:Weight,change:weight === '—' ? '—' : 'atual',detail:'último registro' },{ label:'Meta mensal',value:String(meta),unit:'%',icon:Target,change:`${history.length} de 16`,detail:'treinos concluídos' }].map(({label,value,unit,icon:Icon,change,detail}) => <article className="stat" key={label}><div className="stat-top"><span>{label}</span><Icon /></div><div className="stat-value">{value} <span>{unit}</span></div><div className="stat-footer"><em>{change}</em>{detail}</div></article>)}</div>; }
-function SectionTitle({title,to,aside}: {title:string;to?: '/evolucao' | '/historico';aside?:string}) { return <div className="section-title"><h2>{title}</h2>{to ? <Link to={to}>Ver tudo<ArrowRight size={12} /></Link> : <span className="text-[10px] text-muted-foreground">{aside}</span>}</div>; }
-function WeightChart({points,current}: {points: WeightPoint[];current:number|null}) { const [period,setPeriod] = useState('30'); const data = period === '7' ? points.slice(-3) : points; const currentLabel = current ? current.toFixed(1).replace('.', ',') : '—'; const change = data.length > 1 ? data[data.length - 1]!.weight - data[0]!.weight : 0; const changeLabel = `${change <= 0 ? '↘' : '↗'} ${Math.abs(change).toFixed(1).replace('.', ',')} kg`; const values = data.map(d => d.weight); const domain: [number, number] = values.length ? [Math.floor(Math.min(...values) - 1), Math.ceil(Math.max(...values) + 1)] : [0, 100]; return <div className="chart-panel"><div className="chart-heading"><div><h3>Peso corporal</h3><div className="flex items-center"><strong className="chart-number">{currentLabel} <span>kg</span></strong>{data.length > 1 && <span className="chart-change">{changeLabel}</span>}</div></div><select className="chart-select" aria-label="Período da evolução" value={period} onChange={e => setPeriod(e.target.value)}><option value="30">Últimos 30 dias</option><option value="7">Últimos 7 dias</option></select></div>{data.length === 0 ? <p className="py-12 text-center text-sm text-muted-foreground">Registre seu peso no perfil para ver a evolução.</p> : <div className="chart"><ResponsiveContainer width="100%" height="100%"><AreaChart data={data} margin={{top:10,right:15,left:-25,bottom:0}}><defs><linearGradient id="weight-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--primary)" stopOpacity={.17} /><stop offset="100%" stopColor="var(--primary)" stopOpacity={0} /></linearGradient></defs><CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="3 5" /><XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill:'var(--muted-foreground)',fontSize:9}} minTickGap={20} dy={7} /><YAxis domain={domain} axisLine={false} tickLine={false} tick={{fill:'var(--muted-foreground)',fontSize:9}} /><Tooltip content={({active,payload}) => active && payload?.length ? <div className="rounded-md border border-border bg-card p-2 text-xs">{payload[0]?.value} kg</div> : null} /><Area dataKey="weight" type="monotone" stroke="var(--chart-line)" strokeWidth={2} fill="url(#weight-fill)" dot={false} activeDot={{r:4,fill:'var(--primary)'}} isAnimationActive={false} /></AreaChart></ResponsiveContainer></div>}<div className="chart-caption"><i />Peso registrado <span className="ml-auto">Atualizado hoje</span></div></div>; }
-function RecentList({rows}: {rows: HistoryRow[]}) { if (rows.length === 0) return <p className="rounded-lg border border-border bg-card p-6 text-center text-sm text-muted-foreground">Nenhum treino registrado ainda. Conclua um treino para ver seu histórico aqui.</p>; return <div className="recent-list">{rows.map((item,index) => <article className="recent-item" key={`${item.date}-${index}`}><span className="workout-icon"><Dumbbell /></span><div className="recent-info"><h3>{item.title}</h3><p>{item.date} <span className="mx-1">·</span> {item.duration} <span className="mx-1">·</span> {item.exercises} exercícios</p></div><Check className="completed" aria-label="Concluído" /></article>)}</div>; }
-function Modal({title,onClose,children}: {title:string;onClose:()=>void;children:ReactNode}) { useEffect(() => { function close(e:KeyboardEvent) { if(e.key === 'Escape') onClose(); } document.addEventListener('keydown',close); const old = document.body.style.overflow; document.body.style.overflow='hidden'; return () => { document.removeEventListener('keydown',close); document.body.style.overflow=old; }; },[onClose]); return <div className="modal-backdrop" onClick={onClose}><section className="modal" role="dialog" aria-modal="true" aria-label={title} onClick={e => e.stopPropagation()}><div className="modal-header"><h2>{title}</h2><Button variant="ghost" size="icon" aria-label="Fechar" onClick={onClose} autoFocus><X /></Button></div>{children}</section></div>; }

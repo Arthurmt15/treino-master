@@ -7,7 +7,12 @@ import { RateLimiter } from "@/shared/rate-limit";
 // Relogio manual (o teste avanca o tempo a vontade).
 function clock() {
   let t = 0;
-  return { now: () => t, advance: (ms: number) => { t += ms; } };
+  return {
+    now: () => t,
+    advance: (ms: number) => {
+      t += ms;
+    },
+  };
 }
 
 describe("RateLimiter", () => {
